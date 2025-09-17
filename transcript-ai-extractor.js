@@ -667,21 +667,22 @@ Extract and return ONLY a JSON object with these fields:
 
     // Extract data from VAPI AI Summary using intelligent field mapping
     async extractFromVapiSummary(summary, existingFieldData = {}) {
-        console.log('🧠 Extracting from VAPI AI Summary using intelligent field mapping');
+        console.log('🧠 Extracting from VAPI AI Summary using unified field mapper');
         
-        // Import and use the intelligent field mapper (simple question mapper)
+        // Use single unified field mapper - no more dual system complexity
         try {
-            const { IntelligentFieldMapper } = await import('./intelligent-field-mapper.js');
-            const mapper = new IntelligentFieldMapper();
+            const { FieldMapper } = await import('./field-mapper.js');
+            const mapper = new FieldMapper();
             
-            const intelligentData = await mapper.extractIntelligentFields(summary, '', {}, existingFieldData);
-            if (intelligentData && Object.keys(intelligentData).length > 0) {
-                console.log('✅ Using simple question mapper extraction (high accuracy)');
-                console.log(`🎯 Simple mapper extracted ${Object.keys(intelligentData).length} fields - NO FALLBACKS`);
-                return intelligentData;
+            // Extract from summary only (transcript will be handled separately)
+            const extractedData = await mapper.extractFromCall(summary, null);
+            if (extractedData && Object.keys(extractedData).length > 0) {
+                console.log('✅ Using unified field mapper (streamlined, accurate)');
+                console.log(`🎯 Unified mapper extracted ${Object.keys(extractedData).length} fields`);
+                return extractedData;
             }
         } catch (error) {
-            console.log('⚠️ Simple question mapper failed, using minimal fallback');
+            console.log('⚠️ Unified field mapper failed, using minimal fallback');
             console.error('Error details:', error.message);
             // Return minimal system fields instead of structured extraction
             return {
@@ -698,8 +699,8 @@ Extract and return ONLY a JSON object with these fields:
             };
         }
         
-        // No more fallbacks - simple question mapper is the only method
-        console.log('❌ Simple question mapper returned no data - returning minimal system fields');
+        // Fallback if unified mapper returns no data
+        console.log('❌ Unified field mapper returned no data - returning minimal system fields');
         return {
             'Last Contact': {
                 value: new Date().toISOString().split('T')[0],
