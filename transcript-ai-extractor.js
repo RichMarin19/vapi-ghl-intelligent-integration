@@ -667,22 +667,21 @@ Extract and return ONLY a JSON object with these fields:
 
     // Extract data from VAPI AI Summary using intelligent field mapping
     async extractFromVapiSummary(summary, existingFieldData = {}) {
-        console.log('🧠 Extracting from VAPI AI Summary using direct simple question mapper');
+        console.log('🧠 Extracting from VAPI AI Summary using intelligent field mapping');
         
-        // PERMANENT FIX: Call SimpleQuestionMapper directly - bypass fallback system
+        // Import and use the intelligent field mapper (simple question mapper)
         try {
-            const { SimpleQuestionMapper } = await import('./simple-question-mapper.js');
-            const mapper = new SimpleQuestionMapper();
+            const { IntelligentFieldMapper } = await import('./intelligent-field-mapper.js');
+            const mapper = new IntelligentFieldMapper();
             
-            // Extract from summary with transcript support (transcript will be empty string for now)
-            const extractedData = await mapper.extractFromSummary(summary, '');
-            if (extractedData && Object.keys(extractedData).length > 0) {
-                console.log('✅ Using DIRECT simple question mapper (no fallbacks, high accuracy)');
-                console.log(`🎯 Direct mapper extracted ${Object.keys(extractedData).length} fields - PURE EXTRACTION`);
-                return extractedData;
+            const intelligentData = await mapper.extractIntelligentFields(summary, '', {}, existingFieldData);
+            if (intelligentData && Object.keys(intelligentData).length > 0) {
+                console.log('✅ Using simple question mapper extraction (high accuracy)');
+                console.log(`🎯 Simple mapper extracted ${Object.keys(intelligentData).length} fields - NO FALLBACKS`);
+                return intelligentData;
             }
         } catch (error) {
-            console.log('⚠️ Direct simple question mapper failed, using minimal fallback');
+            console.log('⚠️ Simple question mapper failed, using minimal fallback');
             console.error('Error details:', error.message);
             // Return minimal system fields instead of structured extraction
             return {
