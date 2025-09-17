@@ -28,11 +28,11 @@ async function testMichaelJordanExtraction() {
         };
 
         console.log('🧠 Expected Field Values from Latest Call Summary:');
-        console.log('   Motivation: "Frustrated by agent calls"');
+        console.log('   Motivation: "Relocation" (wants to move to San Francisco)');
         console.log('   Expectations: "$1.6 million"'); 
         console.log('   Timeline: "February"');
         console.log('   Next Destination: "San Francisco"');
-        console.log('   Disappointments: "Agent calls"');
+        console.log('   Disappointments: "Frustrated by agent calls"');
         console.log('   Concerns: "Agent calls"');
         console.log('   Openness to Re-list: "Yes, if buyer pays commission"');
         console.log('');
@@ -82,8 +82,8 @@ function validateMichaelFieldResult(fieldName, value) {
     
     switch (fieldName) {
         case 'Motivation':
-            if (lowerValue.includes('frustrated by agent calls') || lowerValue.includes('frustrated') && lowerValue.includes('agent')) return '✅ CORRECT';
-            return '❌ WRONG (should be "Frustrated by agent calls")';
+            if (lowerValue.includes('relocation')) return '✅ CORRECT';
+            return '❌ WRONG (should be "Relocation")';
             
         case 'Expectations':
             if (lowerValue.includes('1.6 million') || lowerValue.includes('$1.6')) return '✅ CORRECT';
@@ -98,8 +98,8 @@ function validateMichaelFieldResult(fieldName, value) {
             return '❌ WRONG (should be "San Francisco")';
             
         case 'Disappointments':
-            if (lowerValue.includes('agent calls') || (lowerValue.includes('agent') && lowerValue.includes('call'))) return '✅ CORRECT';
-            return '❌ WRONG (should be "Agent calls")';
+            if (lowerValue.includes('frustrated by agent calls') || lowerValue.includes('frustrated') && lowerValue.includes('agent')) return '✅ CORRECT';
+            return '❌ WRONG (should be "Frustrated by agent calls")';
             
         case 'Concerns':
             if (lowerValue.includes('agent calls') || (lowerValue.includes('agent') && lowerValue.includes('call'))) return '✅ CORRECT';

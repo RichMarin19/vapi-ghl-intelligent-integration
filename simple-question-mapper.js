@@ -163,11 +163,11 @@ export class SimpleQuestionMapper {
         const summaryLower = summary.toLowerCase();
 
         // Direct extraction based on summary content
-        // Motivation: Look for selling reasons
-        if (summaryLower.includes('to move to')) {
+        // Motivation: Look for WHY they want to sell FSBO (avoid frustrations - those are disappointments)
+        if (summaryLower.includes('save commission') || summaryLower.includes('saving commission')) {
             extractedFields.motivation = {
-                value: 'Relocation',
-                confidence: 85,
+                value: 'Save commission',
+                confidence: 90,
                 source: 'direct_extraction'
             };
         } else if (summaryLower.includes('commission') && summaryLower.includes('money')) {
@@ -176,9 +176,15 @@ export class SimpleQuestionMapper {
                 confidence: 85,
                 source: 'direct_extraction'
             };
-        } else if (summaryLower.includes('save commission') || summaryLower.includes('saving commission')) {
+        } else if (summaryLower.includes('to move to')) {
             extractedFields.motivation = {
-                value: 'Save commission',
+                value: 'Relocation',
+                confidence: 85,
+                source: 'direct_extraction'
+            };
+        } else if (summaryLower.includes('get the most money') || summaryLower.includes('maximize') && summaryLower.includes('money')) {
+            extractedFields.motivation = {
+                value: 'Get the most money',
                 confidence: 85,
                 source: 'direct_extraction'
             };
@@ -228,16 +234,23 @@ export class SimpleQuestionMapper {
         }
 
         // Disappointments: Look for frustration or disappointment mentions
-        if (summaryLower.includes('frustrated by agent calls')) {
+        if (summaryLower.includes('frustrated by agent calls') || 
+            (summaryLower.includes('frustrated') && summaryLower.includes('agent'))) {
             extractedFields.disappointments = {
-                value: 'Agent calls',
-                confidence: 90,
+                value: 'Frustrated by agent calls',
+                confidence: 95,
                 source: 'direct_extraction'
             };
         } else if (summaryLower.includes('concerns about buyer quality')) {
             extractedFields.disappointments = {
                 value: 'Quality of buyers',
                 confidence: 90,
+                source: 'direct_extraction'
+            };
+        } else if (summaryLower.includes('agent calls')) {
+            extractedFields.disappointments = {
+                value: 'Agent calls',
+                confidence: 85,
                 source: 'direct_extraction'
             };
         }
@@ -249,7 +262,8 @@ export class SimpleQuestionMapper {
                 confidence: 90,
                 source: 'direct_extraction'
             };
-        } else if (summaryLower.includes('frustrated by agent calls')) {
+        } else if (summaryLower.includes('frustrated by agent calls') || 
+                   (summaryLower.includes('frustrated') && summaryLower.includes('agent'))) {
             extractedFields.concerns = {
                 value: 'Agent calls',
                 confidence: 90,
@@ -275,14 +289,173 @@ export class SimpleQuestionMapper {
         return extractedFields;
     }
 
-    // Main extraction method
-    async extractFromSummary(summary) {
+    // Extract from actual call transcript using JSON structure
+    extractFromTranscript(transcript) {
+        console.log('📞 Extracting from call transcript using JSON structure');
+        const extractedFields = {};
+        
+        try {
+            // Try to parse transcript as JSON first
+            let transcriptData;
+            if (typeof transcript === 'string' && transcript.trim().startsWith('{')) {
+                transcriptData = JSON.parse(transcript);
+                console.log('📋 Parsed transcript as JSON structure');
+            } else {
+                // If not JSON, convert string transcript to structured format
+                transcriptData = this.parseStringTranscriptToJSON(transcript);
+                console.log('📋 Converted string transcript to JSON structure');
+            }
+
+            if (transcriptData && transcriptData.messages && Array.isArray(transcriptData.messages)) {
+                console.log(`📝 Found ${transcriptData.messages.length} messages in transcript`);
+                
+                // Look for specific question-answer patterns
+                for (const [fieldKey, mapping] of this.questionMappings) {
+                    for (const question of mapping.questions) {
+                        const answer = this.findAnswerInMessages(transcriptData.messages, question);
+                        
+                        if (answer) {
+                            console.log(`🎯 Transcript Q&A found for ${mapping.fieldName}: "${answer}"`);
+                            extractedFields[fieldKey] = {
+                                value: answer,
+                                confidence: 95,
+                                source: 'transcript_json'
+                            };
+                            break; // Found answer for this field, move to next
+                        }
+                    }
+                }
+            } else {
+                console.log('⚠️ Transcript not in expected JSON format, skipping transcript extraction');
+            }
+        } catch (error) {
+            console.log('⚠️ Failed to parse transcript as JSON, skipping transcript extraction:', error.message);
+        }
+
+        return extractedFields;
+    }
+
+    // Convert string transcript to JSON structure
+    parseStringTranscriptToJSON(transcript) {
+        const messages = [];
+        
+        // Split by common speaker patterns
+        const segments = transcript.split(/\b(AI Assistant|Olivia|Michael|Speaker|User|Assistant):\s*/i);
+        
+        let currentSpeaker = null;
+        for (let i = 0; i < segments.length; i++) {
+            const segment = segments[i].trim();
+            if (!segment) continue;
+            
+            // Check if this segment is a speaker name
+            if (/^(AI Assistant|Olivia|Michael|Speaker|User|Assistant)$/i.test(segment)) {
+                currentSpeaker = segment;
+            } else if (currentSpeaker && segment.length > 0) {
+                // This is message content
+                messages.push({
+                    role: currentSpeaker.toLowerCase().includes('assistant') || currentSpeaker.toLowerCase().includes('olivia') ? 'assistant' : 'user',
+                    content: segment,
+                    speaker: currentSpeaker
+                });
+            }
+        }
+        
+        return { messages };
+    }
+
+    // Find answer in structured messages
+    findAnswerInMessages(messages, question) {
+        const questionLower = question.toLowerCase();
+        
+        for (let i = 0; i < messages.length; i++) {
+            const message = messages[i];
+            if (!message.content) continue;
+            
+            const contentLower = message.content.toLowerCase();
+            
+            // Check if this message contains the question
+            if (contentLower.includes(questionLower)) {
+                // Look for the answer in the next user message
+                for (let j = i + 1; j < messages.length; j++) {
+                    const nextMessage = messages[j];
+                    if (nextMessage.role === 'user' && nextMessage.content && nextMessage.content.trim().length > 3) {
+                        return this.cleanAnswer(nextMessage.content);
+                    }
+                }
+                
+                // If no next user message, look for answer in the same message after the question
+                const questionIndex = contentLower.indexOf(questionLower);
+                if (questionIndex !== -1) {
+                    const afterQuestion = message.content.substring(questionIndex + question.length);
+                    const answer = this.cleanAnswer(afterQuestion);
+                    if (answer && answer.length > 3) {
+                        return answer;
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    // Clean and format the answer
+    cleanAnswer(rawAnswer) {
+        if (!rawAnswer) return null;
+        
+        let answer = rawAnswer.trim();
+        
+        // Remove common filler words and punctuation at the start
+        answer = answer.replace(/^[\s,.\-:?!]+/, '');
+        answer = answer.replace(/^(well|um|uh|so|like|you know|i mean|yeah|yes|no)[\s,]+/i, '');
+        
+        // Extract until natural break or end
+        const stopPatterns = [
+            /\.\s+[A-Z]/,     // Next sentence
+            /\?\s+/,          // Next question
+            /\.\s+The\s+/,    // Natural break
+        ];
+        
+        let endIndex = answer.length;
+        for (const pattern of stopPatterns) {
+            const match = answer.search(pattern);
+            if (match !== -1 && match < endIndex) {
+                endIndex = match + 1; // Include the period
+            }
+        }
+        
+        answer = answer.substring(0, endIndex).trim();
+        
+        // Clean up final answer
+        answer = answer.replace(/^[\s,.\-:?!]+/, '');
+        answer = answer.replace(/[\s,.\-:?!]+$/, '');
+        
+        // Only return if it's meaningful
+        if (answer.length > 3 && /[a-zA-Z]/.test(answer)) {
+            return answer;
+        }
+        
+        return null;
+    }
+
+
+    // Main extraction method with transcript and summary support
+    async extractFromSummary(summary, transcript = null) {
         console.log('🎯 Using simple question-based mapping');
         const extractedFields = {};
 
-        // Try question-based extraction first
+        // Try transcript Q&A extraction first if transcript is available
+        if (transcript && transcript.trim().length > 0) {
+            console.log('📞 Trying transcript Q&A extraction first...');
+            const transcriptFields = this.extractFromTranscript(transcript);
+            Object.assign(extractedFields, transcriptFields);
+            console.log(`📞 Transcript extraction found ${Object.keys(transcriptFields).length} fields`);
+        }
+
+        // Try summary question-based extraction for missing fields
         let questionFieldsFound = 0;
         for (const [fieldKey, mapping] of this.questionMappings) {
+            if (extractedFields[fieldKey]) continue; // Skip if already found in transcript
+            
             try {
                 const result = this.extractFieldFromSummary(summary, fieldKey);
                 if (result) {
@@ -294,11 +467,20 @@ export class SimpleQuestionMapper {
             }
         }
 
-        // If no questions found, use direct extraction
-        if (questionFieldsFound === 0) {
-            console.log('🔄 No questions found in summary, using direct extraction');
+        // Use direct extraction for any remaining missing fields
+        const missingFields = Array.from(this.questionMappings.keys())
+            .filter(fieldKey => !extractedFields[fieldKey]);
+        
+        if (missingFields.length > 0) {
+            console.log(`🔄 Using direct extraction for ${missingFields.length} missing fields`);
             const directFields = this.extractDirectFromSummary(summary);
-            Object.assign(extractedFields, directFields);
+            
+            // Only add direct fields that weren't already found
+            for (const [fieldKey, fieldData] of Object.entries(directFields)) {
+                if (!extractedFields[fieldKey]) {
+                    extractedFields[fieldKey] = fieldData;
+                }
+            }
         }
 
         // Add system fields

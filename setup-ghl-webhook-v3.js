@@ -1,51 +1,20 @@
 #!/usr/bin/env node
 
-// Final script to automatically configure GHL webhook for VAPI integration
+// Script to automatically configure GHL webhook for VAPI integration using PIT tokens
 import axios from 'axios';
-import jwt from 'jsonwebtoken';
-import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { PITTokenManager } from './pit-token-manager.js';
 
 const LAMBDA_URL = 'https://7jahamtx2g2pkure4ew4nty7ua0xyykl.lambda-url.us-east-2.on.aws/';
 const GHL_BASE_URL = 'https://services.leadconnectorhq.com';
 
-// AWS SSM client
-const ssmClient = new SSMClient({ region: process.env.AWS_REGION || 'us-east-1' });
+// PIT Token Manager (no OAuth needed)
+const pitTokenManager = new PITTokenManager();
 
-// Parameter Store paths
-const ACCESS_TOKEN_PARAM = '/vapi-ghl-integration/ghl-access-token';
+// Removed getParameter function - PIT token manager handles token retrieval
 
-async function getParameter(paramName, decrypt = true) {
-    try {
-        const command = new GetParameterCommand({
-            Name: paramName,
-            WithDecryption: decrypt
-        });
-        const response = await ssmClient.send(command);
-        return response.Parameter?.Value || null;
-    } catch (error) {
-        console.error(`Error getting parameter ${paramName}:`, error.message);
-        return null;
-    }
-}
+// Removed getLocationIdFromToken function - using hardcoded location ID with PIT tokens
 
-function getLocationIdFromToken(accessToken) {
-    try {
-        const decoded = jwt.decode(accessToken);
-        const locationId = decoded?.authClassId || decoded?.primaryAuthClassId;
-        if (locationId) {
-            console.log('✅ Extracted location ID from token:', locationId);
-            return locationId;
-        }
-        
-        console.error('❌ No location ID found in token');
-        return null;
-    } catch (error) {
-        console.error('Error decoding access token:', error.message);
-        return null;
-    }
-}
-
-async function createWebhook(accessToken, locationId) {
+async function createWebhook(pitToken, locationId) {
     // Try different webhook endpoints and event formats
     const webhookConfigs = [
         {
@@ -79,7 +48,7 @@ async function createWebhook(accessToken, locationId) {
             
             const response = await axios.post(`${GHL_BASE_URL}${config.endpoint}`, config.payload, {
                 headers: {
-                    'Authorization': `Bearer ${accessToken}`,
+                    'Authorization': `Bearer ${pitToken}`,
                     'Version': '2021-07-28',
                     'Content-Type': 'application/json'
                 }
@@ -99,10 +68,10 @@ async function createWebhook(accessToken, locationId) {
     }
     
     console.log('\n🔍 All webhook creation attempts failed. Checking existing webhooks...');
-    return await checkExistingWebhooks(accessToken, locationId);
+    return await checkExistingWebhooks(pitToken, locationId);
 }
 
-async function checkExistingWebhooks(accessToken, locationId) {
+async function checkExistingWebhooks(pitToken, locationId) {
     const checkEndpoints = [
         '/hooks',
         '/locations/webhooks',
@@ -117,7 +86,7 @@ async function checkExistingWebhooks(accessToken, locationId) {
             const response = await axios.get(`${GHL_BASE_URL}${endpoint}`, {
                 params: params,
                 headers: {
-                    'Authorization': `Bearer ${accessToken}`,
+                    'Authorization': `Bearer ${pitToken}`,
                     'Version': '2021-07-28',
                     'Content-Type': 'application/json'
                 }
@@ -163,30 +132,25 @@ async function main() {
     console.log('');
     
     try {
-        // Get access token from Parameter Store
-        console.log('📝 Getting access token from Parameter Store...');
-        const accessToken = await getParameter(ACCESS_TOKEN_PARAM);
+        // Get PIT token (much simpler than OAuth)
+        console.log('📝 Getting PIT token...');
+        await pitTokenManager.getValidToken();
         
-        if (!accessToken) {
-            console.error('❌ No access token found in Parameter Store');
-            console.log('Make sure your GHL access token is stored at:', ACCESS_TOKEN_PARAM);
+        if (!pitTokenManager.pitToken) {
+            console.error('❌ Could not get valid PIT token');
+            console.log('Make sure your PIT token is properly configured');
             process.exit(1);
         }
         
-        console.log('✅ Access token retrieved');
+        console.log('✅ PIT token ready');
         
-        // Extract location ID from token
-        console.log('📍 Extracting location ID from token...');
-        const locationId = getLocationIdFromToken(accessToken);
-        
-        if (!locationId) {
-            console.error('❌ Could not extract location ID from token');
-            process.exit(1);
-        }
+        // Use hardcoded location ID (simpler than parsing from token)
+        const locationId = 'Tty8tmfsIBN4DdOVzgVa'; // Your GHL location ID
+        console.log('📍 Using location ID:', locationId);
         
         // Create or find webhook
         console.log('🔗 Setting up webhook...');
-        const webhook = await createWebhook(accessToken, locationId);
+        const webhook = await createWebhook(pitTokenManager.pitToken, locationId);
         
         if (webhook) {
             console.log('\n🎉 Setup complete!');

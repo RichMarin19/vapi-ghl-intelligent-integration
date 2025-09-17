@@ -590,9 +590,9 @@ export class IntelligentFieldMapper {
     async extractIntelligentFields(summary, transcript = '', callData = {}, existingFieldData = {}) {
         console.log('🧠 Starting simple question-based field extraction...');
         
-        // Use the simple question mapper for accurate extraction
+        // Use the simple question mapper for accurate extraction with transcript support
         const questionMapper = new SimpleQuestionMapper();
-        const extractedFields = await questionMapper.extractFromSummary(summary);
+        const extractedFields = await questionMapper.extractFromSummary(summary, transcript);
         
         // Generate Voice Memory from extracted fields
         const voiceMemoryParts = [];
