@@ -8,15 +8,13 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "deploy": "zip -r function.zip . -x \"*.zip\" \"*-BACKUP-*\" \"response-*.json\" \"test-*.json\" && aws lambda update-function-code --function-name vapi-ghl-integration --zip-file fileb://function.zip",
+    "deploy": "zip -r function.zip . -x \"*.zip\" \"*-BACKUP-*\" \"response-*.json\" \"test-*.json\" \"test-*.js\" \"*test*.js\" \"*.md\" \".git/*\" \".gitignore\" \"node_modules/.cache/*\" \"coverage/*\" \".vscode/*\" \".idea/*\" \"*.log\" \"docs/*\" \"run-tests.sh\" \"realistic-test-payload.json\" \"postman-*.json\" \"test-payload-*\" && aws lambda update-function-code --function-name vapi-ghl-integration --zip-file fileb://function.zip",
     "create-function": "aws lambda create-function --function-name vapi-ghl-integration --runtime nodejs22.x --role arn:aws:iam::YOUR_ACCOUNT:role/lambda-execution-role --handler index.handler --zip-file fileb://function.zip --timeout 60 --memory-size 256"
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.886.0",
     "@aws-sdk/client-ssm": "^3.450.0",
-    "axios": "^1.6.0",
-    "jsonwebtoken": "^9.0.2",
-    "simple-oauth2": "^5.0.0"
+    "axios": "^1.6.0"
   },
   "keywords": [
     "vapi",
